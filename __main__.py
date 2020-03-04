@@ -14,8 +14,9 @@ def load_servers(dir_name):
     return servers, dir_name
 
 def show_servers(servers):
-    for i,server in enumerate(servers):
-        print("{}. {}".format(i+1, server["name"]))
+    server_names = [server["name"] for server in servers]
+    for i,server in enumerate(sorted(server_names)):
+        print("{:3}. {:15}  ( {}@{} \t-p {:6} via {:<15} )".format(i+1, server, servers[i]['user'], servers[i]['host'], servers[i]['port'], 'none' if servers[i]['via'] == '' else servers[i]['via']))
 
 def get_server_from_input(servers):
     server = input("Enter server id or nickname: ")
@@ -31,6 +32,7 @@ def show_menu(servers):
     print("+. Add server")
     print("-. Delete server")
     print("t. Tunneling port")
+    print("c. Change sever settings")
     print("s. Show server parameters")
     print("q. Quit")
 
@@ -45,12 +47,37 @@ def run_option(option, servers, dir_name):
         tunnel_port(servers)
     elif option == "s":
         show_server_parameters(servers)
+    elif option == "c":
+        change_server_settings(servers, dir_name)
     elif option in [server["name"] for server in servers] or option in [str(i+1) for i,_ in enumerate(servers)]:
         run_server(servers, option)
 
+def change_server_settings(servers, dir_name):
+    show_servers(servers)
+    server = get_server_from_input(servers)
+    print("Left parammeter black if you don't want to change it.")
+    name = input("New server nickname (old '{}'): ".format(server["name"]))
+    if name == "": name = server["name"]
+    user = input("New server username (old '{}'): ".format(server["user"]))
+    if user == "": user = server["user"]
+    host = input("New server hostname (old '{}'): ".format(server["host"]))
+    if host == "": host = server["host"]
+    port = input("New server port (old '{}'): ".format(server["port"]))
+    if port == "": port = server["port"]
+    via = input("New server via (old '{}'): ".format(server["via"]))
+    if via == "": via = server["via"]
+    os.remove(os.path.join(dir_name, server["name"]))
+    server["name"] = name
+    server["user"] = user
+    server["host"] = host
+    server["port"] = port
+    server["via"]  = via
+    with open(os.path.join(dir_name, server["name"]), 'wb') as f:
+        pickle.dump(server, f)
+
 def add_server(servers, dir_name):
     new_server = {}
-    new_server["name"] = input("Nickname: ")
+    new_server["name"] = input("Nickname: ")   
     new_server["user"] = input("Username: ")
     new_server["host"] = input("Hostname: ")
     new_server["port"] = input("Port    : ")
@@ -95,7 +122,7 @@ def add_via_ssh_script(servers, server, exec_str):
         via_server = server["via"]
         while True:
             via_server = find_server(servers, via_server)
-            exec_str = "ssh -t {}@{} -p {} ".format(via_server["user"], via_server["host"], via_server["port"]) + exec_str
+            exec_str = "ssh -t {}@{} -p {} -o ServerAliveInterval=240 -o ServerAliveCountMax=2 ".format(via_server["user"], via_server["host"], via_server["port"]) + exec_str
             if via_server["via"] != '':
                 via_server = via_server["via"]
             else:
@@ -112,7 +139,7 @@ def run_server(servers, server):
     if server == None:
         print("No such server")
         return
-    exec_str = "ssh {}@{} -p {}".format(server["user"], server["host"], server["port"])    
+    exec_str = "ssh {}@{} -p {} -o ServerAliveInterval=240 -o ServerAliveCountMax=2".format(server["user"], server["host"], server["port"])    
     add_via_and_execute(servers, server, exec_str)
 
 def tunnel_port(servers):
@@ -139,9 +166,15 @@ def main():
         os.system('cls')
         servers, dir_name = load_servers(SSHARA_DESERT_DIR)
         show_menu(servers)
-        option = input("\n: ")
+        try:
+            option = input("\n: ")
+        except KeyboardInterrupt:
+            exit()
         os.system('cls')
-        run_option(option, servers, dir_name)
+        try:
+            run_option(option, servers, dir_name)
+        except KeyboardInterrupt:
+            pass
 
 if __name__=='__main__':
     main()
